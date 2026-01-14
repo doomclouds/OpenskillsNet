@@ -1,5 +1,7 @@
 # OpenSkills C# CLI 部署指南
 
+**[中文](README.md) | [English](README.EN.md)**
+
 本指南说明如何在 Windows 系统上全局部署 C# 版本的 OpenSkills CLI，使其可以在任意位置的 cmd 或 PowerShell 中执行。
 
 ## 前置要求
