@@ -15,21 +15,13 @@ public static class AgentsMdHelper
     /// <returns>List of skill names found in the file</returns>
     public static List<string> ParseCurrentSkills(string content)
     {
-        List<string> skillNames = [];
-
         // Match <skill><name>skill-name</name>...</skill>
         var skillRegex = new Regex(@"<skill>[\s\S]*?<name>([^<]+)</name>[\s\S]*?</skill>", RegexOptions.Multiline);
         var matches = skillRegex.Matches(content);
 
-        foreach (Match match in matches)
-        {
-            if (match.Groups.Count > 1)
-            {
-                skillNames.Add(match.Groups[1].Value.Trim());
-            }
-        }
-
-        return skillNames;
+        return (from Match match in matches
+                where match.Groups.Count > 1
+                select match.Groups[1].Value.Trim()).ToList();
     }
 
     /// <summary>

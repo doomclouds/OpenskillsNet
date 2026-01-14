@@ -1,4 +1,3 @@
-using System.IO;
 using Spectre.Console;
 using OpenSkills.Cli.Utils;
 
@@ -27,7 +26,7 @@ public static class RemoveCommand
         Directory.Delete(skill.BaseDir, recursive: true);
 
         var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var location = skill.Source.Contains(homeDir) ? "global" : "project";
+        var location = skill.Source.Contains(homeDir, StringComparison.Ordinal) ? "global" : "project";
         
         AnsiConsole.MarkupLine($"[green]✓[/] Removed: {skillName}");
         AnsiConsole.MarkupLine($"   From: {location} ({skill.Source})");

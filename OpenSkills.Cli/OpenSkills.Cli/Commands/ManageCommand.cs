@@ -1,4 +1,3 @@
-using System.IO;
 using Spectre.Console;
 using OpenSkills.Cli.Utils;
 
@@ -33,11 +32,6 @@ public static class ManageCommand
 
         foreach (var skill in sorted)
         {
-            var locationLabel = skill.Location switch
-            {
-                "project" => "[blue](project)[/]",
-                _ => "[dim](global)[/]"
-            };
             prompt.AddChoice(skill.Name);
         }
 
@@ -57,7 +51,7 @@ public static class ManageCommand
             {
                 Directory.Delete(skill.BaseDir, recursive: true);
                 var currentDir = Directory.GetCurrentDirectory();
-                var location = skill.Source.Contains(currentDir) ? "project" : "global";
+                var location = skill.Source.Contains(currentDir, StringComparison.Ordinal) ? "project" : "global";
                 AnsiConsole.MarkupLine($"[green]✓[/] Removed: {skillName} ({location})");
             }
         }

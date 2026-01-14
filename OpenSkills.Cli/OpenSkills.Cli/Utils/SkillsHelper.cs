@@ -1,6 +1,4 @@
-using System.IO;
 using OpenSkills.Cli.Models;
-using OpenSkills.Cli.Utils;
 
 namespace OpenSkills.Cli.Utils;
 
@@ -58,9 +56,10 @@ public static class SkillsHelper
     /// <returns>List of all installed skills</returns>
     public static List<Skill> FindAllSkills()
     {
-        List<Skill> skills = [];
-        HashSet<string> seen = [];
+        var skills = new List<Skill>();
+        var seen = new HashSet<string>();
         var dirs = DirectoryHelper.GetSearchDirs();
+        var currentDir = Directory.GetCurrentDirectory();
 
         foreach (var dir in dirs)
         {
@@ -77,30 +76,26 @@ public static class SkillsHelper
                     var skillName = Path.GetFileName(entry);
                     
                     // Deduplicate: only add if we haven't seen this skill name yet
-                    if (seen.Contains(skillName)) continue;
+                    if (!seen.Add(skillName)) continue;
 
                     var skillPath = Path.Combine(entry, "SKILL.md");
-                    if (File.Exists(skillPath))
+                    if (!File.Exists(skillPath)) continue;
+
+                    var content = File.ReadAllText(skillPath);
+                    var isProjectLocal = dir.Contains(currentDir, StringComparison.Ordinal);
+
+                    skills.Add(new Skill
                     {
-                        var content = File.ReadAllText(skillPath);
-                        var isProjectLocal = dir.Contains(Directory.GetCurrentDirectory());
-
-                        skills.Add(new Skill
-                        {
-                            Name = skillName,
-                            Description = YamlHelper.ExtractYamlField(content, "description"),
-                            Location = isProjectLocal ? "project" : "global",
-                            Path = PathHelper.NormalizePath(entry)
-                        });
-
-                        seen.Add(skillName);
-                    }
+                        Name = skillName,
+                        Description = YamlHelper.ExtractYamlField(content, "description"),
+                        Location = isProjectLocal ? "project" : "global",
+                        Path = PathHelper.NormalizePath(entry)
+                    });
                 }
             }
             catch
             {
                 // Skip directories we can't read
-                continue;
             }
         }
 

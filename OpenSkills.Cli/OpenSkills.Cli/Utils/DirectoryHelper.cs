@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace OpenSkills.Cli.Utils;
 
 /// <summary>

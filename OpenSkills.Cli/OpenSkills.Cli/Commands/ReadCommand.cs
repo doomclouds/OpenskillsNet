@@ -1,4 +1,3 @@
-using System.IO;
 using Spectre.Console;
 using OpenSkills.Cli.Utils;
 

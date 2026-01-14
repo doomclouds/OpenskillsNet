@@ -1,4 +1,3 @@
-using System.IO;
 using Spectre.Console;
 using OpenSkills.Cli.Utils;
 
@@ -67,7 +66,17 @@ public static class SyncCommand
 
             foreach (var skill in sorted)
             {
-                prompt.AddChoice(skill.Name);
+                var choice = prompt.AddChoice(skill.Name);
+                // Default select all project skills (.claude directory)
+                if (skill.Location == "project")
+                {
+                    choice.Select();
+                }
+                // Also select skills that already exist in AGENTS.md (for global skills)
+                else if (currentSkills.Contains(skill.Name))
+                {
+                    choice.Select();
+                }
             }
 
             var selected = AnsiConsole.Prompt(prompt);
