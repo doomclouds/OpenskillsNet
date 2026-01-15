@@ -147,7 +147,19 @@ public static class InstallCommand
         }
         finally
         {
-            Directory.Delete(tempDir, recursive: true);
+            // Try to clean up temp directory, but don't fail if Git files are locked
+            try
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, recursive: true);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Git files may be locked, ignore cleanup errors
+                // The temp directory will be cleaned up on next run or by OS
+            }
         }
 
         PrintPostInstallHints(isProject);
