@@ -48,8 +48,15 @@ public static class InstallCommand
         // Clone and install from git
         var tempDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            $".openskills-temp-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}"
+            ".openskillsNet"
         );
+        
+        // Clean up existing temp directory if it exists
+        if (Directory.Exists(tempDir))
+        {
+            CleanupTempDirectory(tempDir);
+        }
+        
         Directory.CreateDirectory(tempDir);
 
         try
@@ -147,19 +154,8 @@ public static class InstallCommand
         }
         finally
         {
-            // Try to clean up temp directory, but don't fail if Git files are locked
-            try
-            {
-                if (Directory.Exists(tempDir))
-                {
-                    Directory.Delete(tempDir, recursive: true);
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // Git files may be locked, ignore cleanup errors
-                // The temp directory will be cleaned up on next run or by OS
-            }
+            // Try to clean up temp directory with retry mechanism
+            CleanupTempDirectory(tempDir);
         }
 
         PrintPostInstallHints(isProject);
@@ -619,6 +615,123 @@ public static class InstallCommand
             
             var destDir = Path.Combine(targetDir, dirName);
             CopyDirectory(dir, destDir, includeCursorFolder);
+        }
+    }
+
+    private static void CleanupTempDirectory(string tempDir)
+    {
+        if (!Directory.Exists(tempDir))
+        {
+            return;
+        }
+
+        // Try multiple times with delays to handle file locks
+        const int maxRetries = 5;
+        const int delayMs = 200;
+
+        for (int attempt = 0; attempt < maxRetries; attempt++)
+        {
+            try
+            {
+                // Remove read-only attributes first
+                RemoveReadOnlyAttributes(tempDir);
+                
+                Directory.Delete(tempDir, recursive: true);
+                return; // Success
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
+            {
+                if (attempt < maxRetries - 1)
+                {
+                    // Wait before retrying
+                    Thread.Sleep(delayMs * (attempt + 1));
+                }
+                else
+                {
+                    // Final attempt failed, try background deletion
+                    TryBackgroundDeletion(tempDir);
+                }
+            }
+        }
+    }
+
+    private static void RemoveReadOnlyAttributes(string directory)
+    {
+        try
+        {
+            var files = Directory.GetFiles(directory, "*", SearchOption.AllDirectories);
+            foreach (var file in files)
+            {
+                try
+                {
+                    var fileInfo = new FileInfo(file);
+                    if (fileInfo.Exists && fileInfo.IsReadOnly)
+                    {
+                        fileInfo.IsReadOnly = false;
+                    }
+                }
+                catch
+                {
+                    // Ignore individual file errors
+                }
+            }
+
+            var dirs = Directory.GetDirectories(directory, "*", SearchOption.AllDirectories);
+            foreach (var dir in dirs)
+            {
+                try
+                {
+                    var dirInfo = new DirectoryInfo(dir);
+                    if (dirInfo.Exists)
+                    {
+                        dirInfo.Attributes &= ~FileAttributes.ReadOnly;
+                    }
+                }
+                catch
+                {
+                    // Ignore individual directory errors
+                }
+            }
+        }
+        catch
+        {
+            // Ignore errors when removing attributes
+        }
+    }
+
+    private static void TryBackgroundDeletion(string tempDir)
+    {
+        try
+        {
+            // Use cmd.exe to delete in background (Windows)
+            if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+            {
+                var processInfo = new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/c timeout /t 2 /nobreak >nul && rmdir /s /q \"{tempDir}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+                Process.Start(processInfo);
+            }
+            else
+            {
+                // Unix-like systems: use rm command
+                var processInfo = new ProcessStartInfo
+                {
+                    FileName = "/bin/sh",
+                    Arguments = $"-c \"sleep 2 && rm -rf '{tempDir}'\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                Process.Start(processInfo);
+            }
+        }
+        catch
+        {
+            // If background deletion fails, the temp directory will be cleaned up on next run or by OS
         }
     }
 }
