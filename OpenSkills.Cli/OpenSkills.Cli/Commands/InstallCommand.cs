@@ -36,14 +36,17 @@ public static class InstallCommand
         }
 
         // Parse git source
-        var (repoUrl, skillSubpath) = ParseGitSource(source);
+        var (repoUrl, skillSubpath, branchFromSource) = ParseGitSource(source);
         if (repoUrl is null)
         {
             AnsiConsole.MarkupLine("[red]Error: Invalid source format[/]");
-            AnsiConsole.MarkupLine("Expected: owner/repo, owner/repo/skill-name, git URL, or local path");
+            AnsiConsole.MarkupLine("Expected: owner/repo, owner/repo@branch, owner/repo/skill-name, owner/repo@branch/skill-name, git URL, or local path");
             Environment.Exit(1);
             return;
         }
+
+        // Use branch from --branch option, or from source string (owner/repo@branch), or null for default
+        var branch = options.Branch ?? branchFromSource;
 
         // Clone and install from git
         var tempDir = Path.Combine(
@@ -65,16 +68,21 @@ public static class InstallCommand
             var cloneSucceeded = false;
             string? cloneError = null;
 
+            var branchInfo = string.IsNullOrEmpty(branch) ? "" : $" -b \"{branch}\"";
+            var cloneMessage = string.IsNullOrEmpty(branch) 
+                ? "Cloning repository..." 
+                : $"Cloning repository (branch: {branch})...";
+
             AnsiConsole.Status()
                 .Spinner(Spinner.Known.Dots)
-                .Start("Cloning repository...", _ =>
+                .Start(cloneMessage, _ =>
                 {
                     try
                     {
                         var processInfo = new ProcessStartInfo
                         {
                             FileName = "git",
-                            Arguments = $"clone --depth 1 --quiet \"{repoUrl}\" \"{repoDir}\"",
+                            Arguments = $"clone --depth 1{branchInfo} --quiet \"{repoUrl}\" \"{repoDir}\"",
                             UseShellExecute = false,
                             RedirectStandardOutput = true,
                             RedirectStandardError = true,
@@ -161,21 +169,70 @@ public static class InstallCommand
         PrintPostInstallHints(isProject);
     }
 
-    private static (string? RepoUrl, string SkillSubpath) ParseGitSource(string source)
+    private static (string? RepoUrl, string SkillSubpath, string? Branch) ParseGitSource(string source)
     {
         if (IsGitUrl(source))
         {
-            return (source, string.Empty);
+            // For Git URLs, check if branch is specified in URL fragment or query
+            // Example: https://github.com/owner/repo.git#branch
+            var urlBranch = ExtractBranchFromUrl(source);
+            var urlWithoutBranch = RemoveBranchFromUrl(source);
+            return (urlWithoutBranch, string.Empty, urlBranch);
         }
 
-        // GitHub shorthand: owner/repo or owner/repo/skill-path
-        var parts = source.Split('/');
+        // GitHub shorthand: owner/repo, owner/repo@branch, owner/repo/skill-path, or owner/repo@branch/skill-path
+        string? branch = null;
+        var sourceWithoutBranch = source;
+        
+        // Check if branch is specified with @ symbol
+        var atIndex = source.IndexOf('@');
+        if (atIndex > 0)
+        {
+            // Find the next / after @ to determine where branch name ends
+            var slashAfterAt = source.IndexOf('/', atIndex);
+            if (slashAfterAt > atIndex)
+            {
+                // Format: owner/repo@branch/skill-path
+                branch = source.Substring(atIndex + 1, slashAfterAt - atIndex - 1);
+                sourceWithoutBranch = source[..atIndex] + source[slashAfterAt..];
+            }
+            else
+            {
+                // Format: owner/repo@branch
+                branch = source[(atIndex + 1)..];
+                sourceWithoutBranch = source[..atIndex];
+            }
+        }
+
+        var parts = sourceWithoutBranch.Split('/');
         return parts.Length switch
         {
-            2 => ($"https://github.com/{source}", string.Empty),
-            > 2 => ($"https://github.com/{parts[0]}/{parts[1]}", string.Join("/", parts.Skip(2))),
-            _ => (null, string.Empty)
+            2 => ($"https://github.com/{sourceWithoutBranch}", string.Empty, branch),
+            > 2 => ($"https://github.com/{parts[0]}/{parts[1]}", string.Join("/", parts.Skip(2)), branch),
+            _ => (null, string.Empty, null)
         };
+    }
+
+    private static string? ExtractBranchFromUrl(string url)
+    {
+        // Check for branch in URL fragment: https://github.com/owner/repo.git#branch
+        var hashIndex = url.IndexOf('#');
+        if (hashIndex > 0 && hashIndex < url.Length - 1)
+        {
+            return url[(hashIndex + 1)..];
+        }
+        return null;
+    }
+
+    private static string RemoveBranchFromUrl(string url)
+    {
+        // Remove branch from URL fragment
+        var hashIndex = url.IndexOf('#');
+        if (hashIndex > 0)
+        {
+            return url[..hashIndex];
+        }
+        return url;
     }
 
     private static bool IsLocalPath(string source) =>
@@ -665,7 +722,7 @@ public static class InstallCommand
                 try
                 {
                     var fileInfo = new FileInfo(file);
-                    if (fileInfo.Exists && fileInfo.IsReadOnly)
+                    if (fileInfo is { Exists: true, IsReadOnly: true })
                     {
                         fileInfo.IsReadOnly = false;
                     }

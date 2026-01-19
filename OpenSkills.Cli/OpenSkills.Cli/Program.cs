@@ -75,6 +75,7 @@ static void ShowHelp()
     Console.WriteLine("Commands:");
     Console.WriteLine("  list                 List all installed skills");
     Console.WriteLine("  install <source>     Install skill from GitHub or Git URL");
+    Console.WriteLine("                       Options: --global|-g, --universal|-u, --yes|-y, --branch|-b <branch>");
     Console.WriteLine("  read <skill-name>    Read skill to stdout (for AI agents)");
     Console.WriteLine("  sync                 Update AGENTS.md with installed skills");
     Console.WriteLine("  manage               Interactively manage (remove) installed skills");
@@ -86,7 +87,7 @@ static async Task<int> HandleInstall(string[] args)
 {
     if (args.Length < 2)
     {
-        Console.Error.WriteLine("Usage: openskills install <source> [--global|-g] [--universal|-u] [--yes|-y]");
+        Console.Error.WriteLine("Usage: openskills install <source> [--global|-g] [--universal|-u] [--yes|-y] [--branch|-b <branch>]");
         return 1;
     }
 
@@ -106,6 +107,18 @@ static async Task<int> HandleInstall(string[] args)
                 break;
             case "--yes" or "-y":
                 options.Yes = true;
+                break;
+            case "--branch" or "-b":
+                if (i + 1 < args.Length)
+                {
+                    options.Branch = args[i + 1];
+                    i++;
+                }
+                else
+                {
+                    Console.Error.WriteLine("Error: --branch requires a branch name");
+                    return 1;
+                }
                 break;
         }
     }
