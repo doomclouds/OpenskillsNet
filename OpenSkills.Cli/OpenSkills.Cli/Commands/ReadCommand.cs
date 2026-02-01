@@ -23,7 +23,9 @@ public static class ReadCommand
             AnsiConsole.MarkupLine("  .agent/skills/ (project universal)");
             AnsiConsole.MarkupLine("  ~/.agent/skills/ (global universal)");
             AnsiConsole.MarkupLine("  .claude/skills/ (project)");
+            AnsiConsole.MarkupLine("  .cursor/skills/ (project)");
             AnsiConsole.MarkupLine("  ~/.claude/skills/ (global)");
+            AnsiConsole.MarkupLine("  ~/.cursor/skills/ (global)");
             AnsiConsole.MarkupLine("\nInstall skills: openskills install owner/repo");
             Environment.Exit(1);
             return;

@@ -15,9 +15,11 @@ public static class InstallCommand
     /// </summary>
     public static async Task Execute(string source, InstallOptions options)
     {
-        var folder = options.Universal ? ".agent/skills" : ".claude/skills";
-        var isProject = !options.Global; // Default to project unless --global specified
-        var targetDir = DirectoryHelper.GetSkillsDir(isProject, options.Universal);
+        // Default target: .cursor/skills; use --claude for .claude/skills, --universal for .agent/skills
+        var useCursor = !options.Universal && !options.Claude;
+        var folder = options.Universal ? ".agent/skills" : (options.Claude ? ".claude/skills" : ".cursor/skills");
+        var isProject = !options.Global;
+        var targetDir = DirectoryHelper.GetSkillsDir(isProject, options.Universal, useCursor);
 
         var location = isProject
             ? $"[blue]project ({folder})[/]"
@@ -391,18 +393,9 @@ public static class InstallCommand
 
     private static Task InstallFromRepo(string repoDir, string targetDir, InstallOptions options)
     {
-        // Check for .cursor folder in repository root
+        // Copy .cursor folder from repository root when present (includes agents, commands, rules)
         var repoCursorPath = Path.Combine(repoDir, ".cursor");
-        var hasRepoCursor = Directory.Exists(repoCursorPath);
-        var shouldCopyRepoCursor = false;
-
-        if (hasRepoCursor)
-        {
-            shouldCopyRepoCursor = options.Yes || AnsiConsole.Confirm(
-                "[yellow]Repository contains .cursor folder in root. Copy to project root?[/]",
-                false
-            );
-        }
+        var shouldCopyRepoCursor = Directory.Exists(repoCursorPath);
 
         // Find all skills
         var skillDirs = FindSkills(repoDir);
@@ -474,9 +467,29 @@ public static class InstallCommand
             skillsToInstall = skillInfos.Where(info => selected.Contains(info.SkillName)).ToList();
         }
 
+        // Copy repository root .cursor folder first (agents, commands, rules) so installed skills are not overwritten
+        if (shouldCopyRepoCursor)
+        {
+            var projectRoot = Directory.GetCurrentDirectory();
+            var targetCursorPath = Path.Combine(projectRoot, ".cursor");
+            try
+            {
+                if (Directory.Exists(targetCursorPath))
+                {
+                    Directory.Delete(targetCursorPath, recursive: true);
+                }
+                CopyDirectory(repoCursorPath, targetCursorPath, true);
+                AnsiConsole.MarkupLine($"[green]✓[/] Copied .cursor folder (agents, commands, rules) to project root");
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"[yellow]Warning: Failed to copy .cursor folder: {ex.Message}[/]");
+            }
+        }
+
         // Install selected skills
         var currentDir = Directory.GetCurrentDirectory();
-        var isProject = targetDir == Path.Combine(currentDir, ".claude/skills");
+        var isProject = !options.Global;
         var installedCount = 0;
 
         // Check for existing skills and prompt once for all overwrites
@@ -523,27 +536,6 @@ public static class InstallCommand
 
         AnsiConsole.MarkupLine($"[green]\n✓ Installation complete: {installedCount} skill(s) installed[/]");
 
-        // Copy repository root .cursor folder if requested
-        if (shouldCopyRepoCursor)
-        {
-            var projectRoot = Directory.GetCurrentDirectory();
-            var targetCursorPath = Path.Combine(projectRoot, ".cursor");
-            
-            try
-            {
-                if (Directory.Exists(targetCursorPath))
-                {
-                    Directory.Delete(targetCursorPath, recursive: true);
-                }
-                CopyDirectory(repoCursorPath, targetCursorPath, true);
-                AnsiConsole.MarkupLine($"[green]✓[/] Copied .cursor folder to project root");
-            }
-            catch (Exception ex)
-            {
-                AnsiConsole.MarkupLine($"[yellow]Warning: Failed to copy .cursor folder: {ex.Message}[/]");
-            }
-        }
-        
         return Task.CompletedTask;
     }
 
